@@ -63,3 +63,12 @@ tmp/
 # Generated outputs
 generated/
 out/
+
+# Raw landing data (keep folder structure, ignore the files)
+data/landing/**/*.csv
+
+# Airflow / dbt local state
+cosmos/simple_auth_manager_passwords.json.generated
+cosmos/airflow.db
+**/.user.yml
+cosmos/dbt/teratai/target/

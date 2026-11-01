@@ -6,10 +6,7 @@
         incremental_strategy='merge',
         partition_by=['transaction_year', 'transaction_month'],
         cluster_by=['customer_id', 'transaction_date'],
-        tags=['marts', 'fact', 'transactions'],
-        grants={
-            'select': ['analytics_reader', 'reporting_user', 'fraud_detection']
-        }
+        tags=['marts', 'fact', 'transactions']
     )
 }}
 
@@ -83,7 +80,7 @@ select
     -- Transaction velocity
     round(
         ta.total_transactions / nullif(
-            datediff('month', ta.first_transaction_date, ta.last_transaction_date),
+            timestampdiff(MONTH, ta.first_transaction_date, ta.last_transaction_date),
             0
         ),
         2
@@ -97,7 +94,7 @@ select
     -- Business date key
     et.transaction_year || '~' || et.transaction_month || '~' || et.customer_id as period_customer_key,
     -- Hash for deduplication
-    {{ hash_column('et.transaction_id || et.amount_usd::text || et.transaction_date::text') }} as transaction_hash,
+    {{ hash_column('et.transaction_id || cast(et.amount_usd as string) || cast(et.transaction_date as string)') }} as transaction_hash,
     -- Metadata
     current_timestamp() as dbt_updated_at,
     '{{ invocation_id }}' as dbt_invocation_id

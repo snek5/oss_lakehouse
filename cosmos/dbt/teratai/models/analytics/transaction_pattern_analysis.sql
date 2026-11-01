@@ -2,10 +2,7 @@
     config(
         materialized='view',
         schema='analytics',
-        tags=['analytics', 'transaction_patterns'],
-        grants={
-            'select': ['analytics_reader', 'fraud_detection']
-        }
+        tags=['analytics', 'transaction_patterns']
     )
 }}
 

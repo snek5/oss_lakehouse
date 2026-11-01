@@ -4,30 +4,16 @@ lakehouse:
     dev:
       type: spark
       method: thrift
-      host: spark-thrift  # Use the container name when inside Docker network
-      port: 10000
+      host: "{{ env_var('SPARK_THRIFT_HOST', 'spark-thrift') }}"
+      port: "{{ env_var('SPARK_THRIFT_PORT', '10000') | as_number }}"
       user: hive
       auth: NONE
-      
-      schema: default
-      
-      session_properties:
-        spark.sql.catalog.iceberg: org.apache.iceberg.spark.SparkCatalog
-        spark.sql.catalog.iceberg.type: rest
-        spark.sql.catalog.iceberg.uri: http://iceberg-rest:8181
-        spark.sql.catalog.iceberg.warehouse: s3://warehouse
-        spark.sql.catalog.iceberg.io-impl: org.apache.iceberg.aws.s3.S3FileIO
-        spark.sql.catalog.iceberg.s3.endpoint: http://minio:9000
-        spark.sql.catalog.iceberg.s3.path-style-access: "true"
-        spark.sql.catalog.iceberg.s3.access-key-id: minio
-        spark.sql.catalog.iceberg.s3.secret-access-key: minio123
-        spark.sql.catalog.iceberg.s3.region: us-east-1
-        spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
-      
+
+      # Iceberg catalog, MinIO and extensions are configured server-side in
+      # spark/base/conf/spark-defaults.conf (spark.sql.defaultCatalog=lakehouse),
+      # so unqualified schemas here are Iceberg namespaces.
+      schema: staging
+      threads: 4
+
       connect_timeout: 60
-      retry_count: 3
-      
-      conf:
-        spark.executor.memory: "2g"
-        spark.executor.cores: "2"
-        spark.driver.memory: "2g"
+      connect_retries: 5

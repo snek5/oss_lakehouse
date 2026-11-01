@@ -2,10 +2,7 @@
     config(
         materialized='view',
         schema='analytics',
-        tags=['analytics', 'loan_portfolio'],
-        grants={
-            'select': ['analytics_reader', 'risk_management']
-        }
+        tags=['analytics', 'loan_portfolio']
     )
 }}
 

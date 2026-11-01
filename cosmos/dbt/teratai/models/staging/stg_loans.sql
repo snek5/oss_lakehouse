@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('csv_imports', 'loans') }}
+    select * from {{ source('raw', 'loans') }}
 ),
 
 renamed as (
@@ -15,13 +15,13 @@ renamed as (
         -- Loan maturity (assuming 5-year term for demonstration)
         date_add('year', 5, {{ safe_timestamp('start_date') }}) as maturity_date,
         -- Loan age in months
-        datediff('month', {{ safe_timestamp('start_date') }}, current_timestamp()) as loan_age_months,
+        timestampdiff(MONTH, {{ safe_timestamp('start_date') }}, current_timestamp()) as loan_age_months,
         -- Loan status
         case 
             when date_add('year', 5, {{ safe_timestamp('start_date') }}) < current_timestamp() then 'Completed'
-            when datediff('year', {{ safe_timestamp('start_date') }}, current_timestamp()) >= 4 then 'Near Maturity'
-            when datediff('year', {{ safe_timestamp('start_date') }}, current_timestamp()) >= 3 then 'Mid-Term'
-            when datediff('year', {{ safe_timestamp('start_date') }}, current_timestamp()) >= 1 then 'Active'
+            when timestampdiff(YEAR, {{ safe_timestamp('start_date') }}, current_timestamp()) >= 4 then 'Near Maturity'
+            when timestampdiff(YEAR, {{ safe_timestamp('start_date') }}, current_timestamp()) >= 3 then 'Mid-Term'
+            when timestampdiff(YEAR, {{ safe_timestamp('start_date') }}, current_timestamp()) >= 1 then 'Active'
             else 'Recent'
         end as loan_status,
         -- Calculate monthly payment using PMT formula (simplified)

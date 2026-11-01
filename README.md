@@ -63,7 +63,8 @@ architecture-beta
   - S3-compatible object store for Iceberg table files
   - exposes the MinIO API on port `9000` and the console on `9001`
 - `minio-init`
-  - bootstraps the `warehouse` bucket automatically
+  - creates the `warehouse` (Iceberg data) and `landing` (raw CSV) buckets
+  - mirrors `./data/landing` into the `landing` bucket on every start
 - `iceberg-rest`
   - Iceberg REST catalog service
   - connects to PostgreSQL at `jdbc:postgresql://postgres:5432/iceberg_catalog`
@@ -79,9 +80,11 @@ architecture-beta
 ## Repository layout
 
 - `docker-compose.yml` defines the local infrastructure stack
-- `cosmos/dbt_project.yml` defines the dbt project
-- `cosmos/profiles.yml` configures the Spark/Thrift connection to the local stack
-- `cosmos/models/` contains staging, intermediate, mart, and analytics dbt models
+- `data/landing/` is where raw CSVs go, one folder per source table (git-ignored)
+- `cosmos/dbt/teratai/dbt_project.yml` defines the dbt project
+- `cosmos/dbt/teratai/profiles.yml` configures the Spark Thrift connection
+- `cosmos/dbt/teratai/models/` contains staging, intermediate, mart, and analytics dbt models
+- `cosmos/dbt/teratai/macros/stage_raw_sources.sql` loads the landing CSVs into `raw.*` Iceberg tables
 - `cosmos/dags/teratai_dag.py` contains an example Airflow Cosmos DAG
 - `spark/` contains the Spark image build context and entrypoint scripts
 
@@ -96,22 +99,30 @@ architecture-beta
 
 ## Local usage
 
-Start the stack:
+1. Put your CSVs in `data/landing/<table>/` (customers, accounts, branches,
+   cards, loans, merchants, transactions).
+
+2. Start the stack (this also builds the `spark-base` image):
+
+   ```bash
+   docker compose up --build -d
+   docker compose ps
+   ```
+
+3. Run dbt from the cosmos container. The first run creates the `raw.*`
+   Iceberg tables from the CSVs, then builds every model:
+
+   ```bash
+   docker compose exec cosmos bash -c "cd /app/dbt/teratai && dbt deps && dbt run"
+   ```
+
+   Or trigger `teratai_dag` in Airflow, which runs `stage_raw_sources` first
+   and then one task per model.
+
+Reload raw tables after changing the CSVs:
 
 ```bash
-docker compose up --build
-```
-
-Start detached:
-
-```bash
-docker compose up --build -d
-```
-
-Check running services:
-
-```bash
-docker compose ps
+docker compose exec cosmos bash -c "cd /app/dbt/teratai && dbt run-operation stage_raw_sources --args '{refresh: true}'"
 ```
 
 Stop the stack:
@@ -140,8 +151,9 @@ After that, copy or mount the relevant files such as `profiles.yml` and `models/
 
 ## Important notes
 
-- `iceberg-rest` must be running before Spark can use the Iceberg catalog.
-- The dbt profile in `cosmos/profiles.yml` uses the container hostname `spark-thrift` and the REST catalog endpoint `http://iceberg-rest:8181`.
+- `spark-thrift` waits for `iceberg-rest` to answer on `/v1/config` before starting.
+- Iceberg, MinIO and the default catalog (`lakehouse`) are configured in `spark/base/conf/spark-defaults.conf`, which is baked into the `spark-base` image. Rebuild after changing it: `docker compose build spark-master`.
+- A missing landing folder makes the raw load fail with `PATH_NOT_FOUND: s3a://landing/<table>`. Add the CSVs, then `docker compose up minio-init`.
 - The Spark entrypoint scripts should be executable:
   - `chmod +x spark/spark-thrift/scripts/entrypoint.sh`
 - Do not use MySQL-style SQL in PostgreSQL initialization scripts. For example, `CREATE DATABASE IF NOT EXISTS` is invalid in PostgreSQL.

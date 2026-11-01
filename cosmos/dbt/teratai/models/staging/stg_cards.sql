@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('csv_imports', 'cards') }}
+    select * from {{ source('raw', 'cards') }}
 ),
 
 renamed as (
@@ -15,7 +15,7 @@ renamed as (
             else false
         end as is_expired,
         -- Calculate months until expiration
-        datediff('month', current_timestamp(), cast(expiration_date as timestamp)) as months_until_expiry,
+        timestampdiff(MONTH, current_timestamp(), cast(expiration_date as timestamp)) as months_until_expiry,
         -- Extract year and month for expiry
         year(cast(expiration_date as timestamp)) as expiry_year,
         month(cast(expiration_date as timestamp)) as expiry_month

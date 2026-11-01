@@ -4,10 +4,7 @@
         schema='analytics',
         unique_key='customer_id',
         incremental_strategy='merge',
-        tags=['analytics', 'clv_analysis'],
-        grants={
-            'select': ['analytics_reader', 'marketing_team']
-        }
+        tags=['analytics', 'clv_analysis']
     )
 }}
 

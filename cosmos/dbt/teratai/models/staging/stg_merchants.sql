@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('csv_imports', 'merchants') }}
+    select * from {{ source('raw', 'merchants') }}
 ),
 
 renamed as (

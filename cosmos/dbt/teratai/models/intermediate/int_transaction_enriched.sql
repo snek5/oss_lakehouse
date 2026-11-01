@@ -139,8 +139,7 @@ select
         rows unbounded preceding
     ) as cumulative_spend,
     -- Hours since last transaction
-    datediff(
-        'hour',
+    timestampdiff(HOUR,
         lag(t.transaction_date) over (
             partition by a.customer_id 
             order by t.transaction_date

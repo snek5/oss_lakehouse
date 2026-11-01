@@ -81,11 +81,11 @@ select
     -- Use macro for age calculation
     {{ age_years('l.start_date') }} as loan_age_years,
     -- Remaining term in months
-    datediff('month', current_timestamp(), l.maturity_date) as months_to_maturity,
+    timestampdiff(MONTH, current_timestamp(), l.maturity_date) as months_to_maturity,
     -- Maturity status
     case 
         when l.maturity_date < current_timestamp() then 'Matured'
-        when datediff('month', current_timestamp(), l.maturity_date) <= 6 then 'Near Maturity'
+        when timestampdiff(MONTH, current_timestamp(), l.maturity_date) <= 6 then 'Near Maturity'
         else 'Active'
     end as maturity_status,
     -- Generate surrogate key using macro
