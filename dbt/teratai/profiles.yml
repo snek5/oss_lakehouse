@@ -1,0 +1,23 @@
+teratai:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # DuckDB runs in-process inside each dbt invocation. Nothing is stored in this in-memory
+      # database: all models are written to the DuckLake catalog `lake` (catalogs.yml).
+      path: ":memory:"
+      schema: main
+      threads: 4
+      # Needs the system DuckDB driver installed with `dbc install duckdb`
+      # (dbt v2's bundled driver can't load extensions).
+      extensions:
+        - ducklake
+        - postgres
+
+      # Live connections to client databases: attach them read-only and reference them
+      # from sources.yml (database: <alias>). Example:
+      # attach:
+      #   - path: "postgresql://reader@client-db:5432/core_banking"
+      #     type: postgres
+      #     alias: client_core
+      #     read_only: true

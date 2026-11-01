@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: "Customer dimension with account, loan and card metrics and segmentation"
+    columns:
+      - name: customer_id
+        data_tests:
+          - unique
+          - not_null
+      - name: total_balance_usd
+        description: "Total balance across all accounts"
+      - name: total_loans
+        description: "Number of loans that haven't completed"
+      - name: credit_score
+        description: "Customer's credit score"
+      - name: customer_segment
+        description: "Customer segment classification"
+
+  - name: fct_transactions
+    description: "Transaction fact table"
+    columns:
+      - name: transaction_id
+        data_tests:
+          - unique
+          - not_null
+      - name: amount_usd
+        description: "Transaction amount"
+      - name: transaction_date
+        description: "Timestamp of the transaction"
+      - name: transaction_risk_flag
+        description: "Normal / Suspicious / Anomaly based on the customer's z-score"
+
+  - name: fct_account_summary
+    description: "Account summary with transaction metrics"
+    columns:
+      - name: account_id
+        data_tests:
+          - unique
+          - not_null
+      - name: current_balance
+        description: "Current account balance"
+      - name: activity_level
+        description: "Account activity classification"

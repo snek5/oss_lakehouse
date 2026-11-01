@@ -1,160 +1,100 @@
-# Teratai Lakehouse Local Stack
+# Teratai Lakehouse: minimal DuckDB + DuckLake stack
 
-This repository provides a local lakehouse environment for experimenting with Apache Spark, Apache Iceberg, MinIO, PostgreSQL, and dbt. The stack is designed to run with Docker Compose and is suitable for local analytics pipelines, SQL testing, and transformation workflows.
+This branch (`ducklake-minimal`) is a slimmed-down take on Teratai. Spark, MinIO, the Iceberg REST catalog and OpenMetadata are gone. What remains:
 
-## What is included
+| Piece | Role |
+|---|---|
+| **DuckDB** | Query engine. Runs in-process inside each dbt invocation, so there's no cluster. |
+| **DuckLake** | Table format and catalog. Snapshots, schema evolution and time travel; catalog metadata in Postgres, data as Parquet. |
+| **CephFS** | Storage. A single-node Ceph cluster serves a POSIX filesystem that holds the landing CSVs and every lake Parquet file. |
+| **dbt v2** (`dbt-oss`) | Transformations. Uses the Rust engine with built-in DuckDB and writes to DuckLake through `catalogs.yml`. |
+| **Airflow 3 + astronomer-cosmos** | Orchestration. Cosmos turns each dbt model and test into an Airflow task. |
 
-The core platform consists of:
-
-- PostgreSQL as the Iceberg metadata catalog
-- MinIO as an S3-compatible warehouse for table data
-- An Iceberg REST catalog service for Spark metadata access
-- Spark master and worker nodes for distributed execution
-- A Spark Thrift Server for SQL and JDBC-style access
-- A dbt project under the cosmos folder with staging, intermediate, mart, and analytics models
-- An example Airflow/Cosmos DAG definition for orchestration
-
-## Architecture
+There are three containers in total: `ceph`, `postgres` and `airflow`.
 
 ```mermaid
 flowchart LR
-    A[Raw / Source Data] --> B[Airflow + Cosmos]
-    B --> C[dbt Project]
-    C --> D[Spark Thrift Server]
-    D --> E[Iceberg REST Catalog]
-    E --> F[PostgreSQL Metadata Catalog]
-    D --> G[MinIO / S3 Warehouse]
-    G --> H[Analytics Consumers]
+    SRC[Client files / extracts] -->|CSV| LAND[/CephFS<br>/lakehouse/landing/]
+    subgraph airflow[airflow container]
+        AF[Airflow 3 + Cosmos] --> DBT[dbt v2]
+        DBT --> DUCK[DuckDB in-process]
+    end
+    LAND --> DUCK
+    DUCK -->|Parquet| LAKE[/CephFS<br>/lakehouse/lake/]
+    DUCK -->|snapshots, schemas, stats| PG[(Postgres<br>ducklake db)]
+    AF --> PGA[(Postgres<br>airflow db)]
+    LAKE --- CEPH[(Ceph: mon, mgr, osd, mds)]
+    LAND --- CEPH
 ```
-```mermaid
-architecture-beta
-    group server_group(server)[Python Container]
-    group spark_group(server)[Spark Cluster]
-    
-    junction junctionRight
 
-    service storage(disk)[S3 Storage]
-    service laut(cloud)[Analytics]
-    service db(database)[Source Database]
-    service db2(database)[Metadata Catalog]
-    service orchestrator(server)[Airflow] in server_group
-    service transformation(server)[dbt] in server_group
-
-    service engine(server)[Master] in spark_group
-    service worker(server)[Worker] in spark_group
-    service thrift(server)[Thrift] in spark_group
-
-    db:R --> L:orchestrator
-    orchestrator:B --> T:transformation
-    transformation:R --> L:thrift
-    thrift:R --> L:junctionRight
-    thrift:T --> B:engine
-    engine:T --> B:worker
-    junctionRight:B --> T:storage
-    junctionRight:T --> B:db2
-    laut:L --> R:db2
-```
-## Services
-
-- `postgres`
-  - PostgreSQL 15 with `POSTGRES_DB=iceberg_catalog`
-  - stores Iceberg catalog metadata
-- `minio`
-  - S3-compatible object store for Iceberg table files
-  - exposes the MinIO API on port `9000` and the console on `9001`
-- `minio-init`
-  - bootstraps the `warehouse` bucket automatically
-- `iceberg-rest`
-  - Iceberg REST catalog service
-  - connects to PostgreSQL at `jdbc:postgresql://postgres:5432/iceberg_catalog`
-  - uses MinIO as the storage backend
-- `spark-master`
-  - Spark master node that schedules work
-- `spark-worker-1` and `spark-worker-2`
-  - Spark workers that execute tasks
-- `spark-thrift`
-  - Spark Thrift Server for SQL clients
-  - depends on `spark-master` and `iceberg-rest`
-
-## Repository layout
-
-- `docker-compose.yml` defines the local infrastructure stack
-- `cosmos/dbt_project.yml` defines the dbt project
-- `cosmos/profiles.yml` configures the Spark/Thrift connection to the local stack
-- `cosmos/models/` contains staging, intermediate, mart, and analytics dbt models
-- `cosmos/dags/teratai_dag.py` contains an example Airflow Cosmos DAG
-- `spark/` contains the Spark image build context and entrypoint scripts
-
-## How it works
-
-1. PostgreSQL starts and initializes the `iceberg_catalog` database.
-2. MinIO starts and exposes an S3-compatible object store.
-3. The Iceberg REST catalog starts after PostgreSQL and MinIO are healthy.
-4. Spark master and workers register with the cluster.
-5. Spark Thrift starts and connects to the Spark master and the Iceberg REST catalog.
-6. The dbt project targets Spark Thrift and uses the Iceberg REST catalog together with MinIO storage.
-
-## Local usage
-
-Start the stack:
+## Quick start
 
 ```bash
-docker compose up --build
+git checkout ducklake-minimal
+docker compose up -d --build        # first boot takes a minute while Ceph bootstraps
+docker compose ps                   # wait until all three are healthy
 ```
 
-Start detached:
+1. Open Airflow at http://localhost:8080. Local dev mode has no login.
+2. Trigger **`teratai_sample_data`**. It writes a synthetic banking dataset to `/lakehouse/landing/<table>/*.csv`.
+3. Trigger **`teratai_lakehouse`**. It checks the landing files, attaches the lake, then runs all dbt models and tests as Cosmos tasks.
+4. Query the result:
 
 ```bash
-docker compose up --build -d
+docker compose exec airflow lake                       # DuckDB shell with the lake attached
+docker compose exec airflow lake -c "from marts.dim_customers limit 5"
+docker compose exec airflow lake -c "from ducklake_snapshots('lake')"   # DuckLake snapshot history
 ```
 
-Check running services:
+To load your own data, put CSVs in `/lakehouse/landing/<table>/` (any number of files per table, all with a header row). The raw layer picks up every file.
 
-```bash
-docker compose ps
+## Layout
+
+```
+docker-compose.yml
+ceph/                    single-node Ceph image + bootstrap script (mon/mgr/osd/mds + CephFS)
+postgres/init/           creates the `ducklake` catalog database next to `airflow`
+airflow/
+  Dockerfile             Airflow 3.3 + cosmos, ceph-fuse, dbt-oss v2 (own venv), DuckDB ADBC driver, DuckDB CLI
+  bin/teratai-entrypoint mounts CephFS at /lakehouse, then drops to the airflow user
+  bin/lake               DuckDB CLI pre-attached to the lake
+  dags/                  teratai_lakehouse (Cosmos), teratai_sample_data
+dbt/teratai/
+  catalogs.yml           DuckLake catalog `lake` (metadata: Postgres, data: /lakehouse/lake/)
+  profiles.yml           DuckDB in-memory + ducklake/postgres extensions
+  models/raw             read_csv() over the CephFS landing zone (all text)
+  models/staging         typing, cleaning
+  models/intermediate    customer 360, loan portfolio, enriched transactions (incremental)
+  models/marts           dim_customers, fct_transactions, fct_account_summary
+  models/analytics       CLV, segmentation, loan portfolio, transaction patterns
 ```
 
-Stop the stack:
+Every model writes to the DuckLake catalog `lake`, which is set by `+catalog_name: lake` in `dbt_project.yml`. Schemas are `raw`, `staging`, `intermediate`, `marts` and `analytics`, so tables appear as `lake.marts.dim_customers` and so on.
 
-```bash
-docker compose down
-```
+## How the pieces connect
 
-## Optional testing container
+- **Ceph to Airflow.** The `ceph` container bootstraps a one-OSD cluster on first start. The OSD is a sparse BlueStore file whose size is set by `CEPH_OSD_SIZE_GB`, default 20. The script creates a CephFS filesystem named `lakehouse` and exports a client keyring and `ceph.conf` into the shared `ceph-client` volume. The Airflow entrypoint waits for that, mounts CephFS with `ceph-fuse` at `/lakehouse`, and then starts Airflow as the `airflow` user.
+- **DuckLake catalog.** `catalogs.yml` uses `metadata_path: postgres:dbname=ducklake`. Host and credentials come from libpq's `PGHOST`, `PGUSER` and `PGPASSWORD` variables set in compose, so no credentials live in the dbt project. Using Postgres as the catalog rather than a `.ducklake` file means several Cosmos tasks can write to the lake at the same time.
+- **dbt v2 under Cosmos.** dbt v2 is a binary, not the `dbt-core` Python package. Cosmos therefore runs it with `InvocationMode.SUBPROCESS` and `dbt_executable_path=/opt/dbt/bin/dbt`. dbt v2's bundled DuckDB driver can't load extensions, so the image installs the system DuckDB driver with `dbc install --level system duckdb`, which dbt v2 prefers.
+- **`prepare_lake` task.** This attaches the lake once, serially, before the parallel dbt tasks start. It creates the catalog tables in Postgres on the first run, plus the schemas.
 
-If you want to test dbt or Cosmos from a separate container, you can attach a temporary container to the same Docker network:
+## Live connections to client databases
 
-```bash
-docker run -d \
-  --name cosmos-test \
-  --restart unless-stopped \
-  --network lakehouse-net \
-  -v "$PWD/cosmos:/workspace" \
-  -w /workspace \
-  -p 123:8080 \
-  python:3.12 \
-  sleep infinity
-```
-
-After that, copy or mount the relevant files such as `profiles.yml` and `models/sources.yml` into the container as needed for local testing.
-
-## Important notes
-
-- `iceberg-rest` must be running before Spark can use the Iceberg catalog.
-- The dbt profile in `cosmos/profiles.yml` uses the container hostname `spark-thrift` and the REST catalog endpoint `http://iceberg-rest:8181`.
-- The Spark entrypoint scripts should be executable:
-  - `chmod +x spark/spark-thrift/scripts/entrypoint.sh`
-- Do not use MySQL-style SQL in PostgreSQL initialization scripts. For example, `CREATE DATABASE IF NOT EXISTS` is invalid in PostgreSQL.
+DuckDB can attach Postgres, MySQL and SQLite databases directly. Add the client database to `profiles.yml` under `attach:` (there's a commented example), mark it `read_only: true`, and reference it from a `sources.yml`. You can then read from it in a raw model instead of `read_csv()`.
 
 ## Ports
 
-- `5432` → PostgreSQL
-- `9000` → MinIO API
-- `9001` → MinIO console
-- `8181` → Iceberg REST catalog
-- `7077` → Spark Master
-- `8080` → Spark Master UI
-- `8081` → Spark Worker 1 UI
-- `8082` → Spark Worker 2 UI
-- `10000` → Spark Thrift Server
-- `4040` → Spark application UI
+| Port | Service |
+|---|---|
+| 8080 | Airflow UI / API |
+| 5432 | Postgres (Airflow metadata + DuckLake catalog) |
+
+Override these with `AIRFLOW_PORT` and `POSTGRES_PORT`; see `.env.example`.
+
+## Notes and caveats
+
+- **Privileges.** `ceph-fuse` needs `/dev/fuse` and `CAP_SYS_ADMIN` in the Airflow container. Compose also sets `label:disable` for SELinux hosts such as Fedora and `apparmor:unconfined` for Ubuntu.
+- **Subnet.** Ceph's monitor needs a fixed IP, so the compose network uses `172.29.10.0/24` with Ceph at `.10`. If that clashes with something on your machine, change `LAKEHOUSE_SUBNET` and `CEPH_MON_IP`.
+- **Local development only.** Ceph runs with a single OSD and replication size 1, and Airflow runs in `standalone` mode with every user treated as admin. Neither setup is suitable for production.
+- **Resetting.** `docker compose down -v` wipes Ceph, Postgres and the lake.
+- **dbt v2 static analysis.** It is turned off for the `raw` layer only, because `read_csv()` schemas can't be known before the query runs.

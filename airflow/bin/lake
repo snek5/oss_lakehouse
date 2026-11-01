@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# DuckDB CLI attached to the DuckLake catalog as `lake`.
+#   lake                       interactive shell
+#   lake -c "select 42"        run one statement
+# Postgres connection comes from PGHOST/PGPORT/PGUSER/PGPASSWORD.
+set -euo pipefail
+
+init="$(mktemp)"
+trap 'rm -f "${init}"' EXIT
+cat > "${init}" <<EOF
+.bail on
+LOAD ducklake;
+LOAD postgres;
+ATTACH IF NOT EXISTS 'ducklake:postgres:dbname=${DUCKLAKE_PG_DB:-ducklake}' AS lake
+  (DATA_PATH '${DUCKLAKE_DATA_PATH:-/lakehouse/lake/}');
+USE lake;
+EOF
+
+duckdb -init "${init}" "$@"

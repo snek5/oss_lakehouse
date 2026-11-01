@@ -63,3 +63,11 @@ tmp/
 # Generated outputs
 generated/
 out/
+
+# dbt / DuckDB
+target/
+dbt_packages/
+*.duckdb
+*.duckdb.wal
+*.ducklake
+landing/

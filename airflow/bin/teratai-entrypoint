@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Runs as root: mounts CephFS with ceph-fuse, prepares the lakehouse folders,
+# then drops to the `airflow` user and hands over to the stock Airflow entrypoint.
+set -euo pipefail
+
+CLIENT="${CEPHFS_CLIENT:-lakehouse}"
+ROOT="${LAKEHOUSE_ROOT:-/lakehouse}"
+CONF_DIR=/ceph-client
+
+echo "[teratai] waiting for Ceph client config in ${CONF_DIR}"
+for _ in $(seq 1 120); do
+  [ -f "${CONF_DIR}/ready" ] && break
+  sleep 2
+done
+[ -f "${CONF_DIR}/ready" ] || { echo "[teratai] Ceph never became ready"; exit 1; }
+
+if ! mountpoint -q "${ROOT}"; then
+  echo "[teratai] mounting CephFS at ${ROOT}"
+  mkdir -p "${ROOT}"
+  # fuse_allow_other defaults to true, so the airflow user can use a root-owned mount.
+  ceph-fuse --id "${CLIENT}" \
+    -c "${CONF_DIR}/ceph.conf" \
+    -k "${CONF_DIR}/ceph.client.${CLIENT}.keyring" \
+    "${ROOT}"
+fi
+
+# landing/  raw files dropped by clients or extract jobs (read by the dbt raw layer)
+# lake/     DuckLake-managed Parquet data files
+mkdir -p "${ROOT}/landing" "${ROOT}/lake"
+chown "$(id -u airflow):0" "${ROOT}" "${ROOT}/landing" "${ROOT}/lake"
+
+export HOME=/home/airflow
+exec setpriv --reuid=airflow --regid=0 --init-groups -- /entrypoint "$@"

@@ -1,0 +1,35 @@
+name: teratai
+version: "2.0"
+profile: teratai
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+
+flags:
+  # dbt v2: lets models write into the DuckLake catalog defined in catalogs.yml
+  use_catalogs_v2: true
+
+models:
+  teratai:
+    # Every model lands in DuckLake: metadata in Postgres, Parquet files on CephFS.
+    +catalog_name: lake
+    +materialized: table
+
+    raw:
+      +schema: raw
+      +tags: ["raw"]
+      # Raw models read CSVs straight off CephFS with read_csv(); their schema can't be
+      # known before execution, so skip dbt v2 static analysis for this layer only.
+      +static_analysis: "off"
+    staging:
+      +schema: staging
+      +tags: ["staging"]
+    intermediate:
+      +schema: intermediate
+      +tags: ["intermediate"]
+    marts:
+      +schema: marts
+      +tags: ["marts"]
+    analytics:
+      +schema: analytics
+      +tags: ["analytics"]

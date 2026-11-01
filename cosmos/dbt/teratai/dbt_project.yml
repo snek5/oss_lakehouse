@@ -1,6 +1,0 @@
-name: 'teratai'
-version: '1.0'
-profile: 'lakehouse'
-model-paths: ["models"]
-models:
-  +file_format: iceberg

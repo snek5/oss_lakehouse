@@ -1,0 +1,18 @@
+# DuckLake catalog used by every model (see +catalog_name in dbt_project.yml).
+# dbt v2 turns this into:
+#   INSTALL ducklake;
+#   ATTACH IF NOT EXISTS 'ducklake:postgres:dbname=ducklake' AS lake (DATA_PATH '/lakehouse/lake/');
+#
+# - metadata_path: DuckLake catalog in Postgres. Host/user/password come from the libpq
+#   environment variables (PGHOST, PGPORT, PGUSER, PGPASSWORD) set in docker-compose.yml,
+#   so nothing secret lives in this file. Postgres lets many Cosmos tasks write concurrently.
+# - data_path: Parquet files are written to CephFS, mounted at /lakehouse in the Airflow container.
+catalogs:
+  - name: lake
+    type: ducklake
+    table_format: default
+    config:
+      duckdb:
+        metadata_path: "postgres:dbname=ducklake"
+        data_path: "/lakehouse/lake/"
+        create_if_not_exists: true
