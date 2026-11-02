@@ -1,4 +1,4 @@
-# Teratai Lakehouse Local Stack
+# OSS Lakehouse Local Stack
 
 This repository provides a local lakehouse environment for experimenting with Apache Spark, Apache Iceberg, MinIO, PostgreSQL, and dbt. The stack is designed to run with Docker Compose and is suitable for local analytics pipelines, SQL testing, and transformation workflows.
 
