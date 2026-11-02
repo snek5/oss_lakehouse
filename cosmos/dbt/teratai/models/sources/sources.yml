@@ -1,80 +1,59 @@
 version: 2
 
+# Raw tables are Iceberg tables in the `raw` namespace, created from the CSVs
+# in the MinIO `landing` bucket by the `stage_raw_sources` macro
+# (runs automatically as an on-run-start hook; see macros/stage_raw_sources.sql).
+#
+# Per table:
+#   meta.landing_path  - folder of CSVs to load (defaults to s3a://landing/<table>/)
+#   meta.csv_options   - Spark CSV reader options, merged over the defaults
+#                        header=true, inferSchema=true, nullValue=''
+
 sources:
-  - name: csv_imports
-    schema: default
+  - name: raw
+    schema: raw
     tables:
       - name: customers
-        description: "CSV files containing customer data"
-        external:
-          location: s3://warehouse/customers/
-          file_format: csv
-          options:
-            header: true
-            delimiter: ','
-            nullValue: ''
+        description: "Customer data loaded from CSV"
+        meta:
+          landing_path: s3a://landing/customers/
+          csv_options:
             dateFormat: 'yyyy-MM-dd'
-      
+
       - name: accounts
-        description: "CSV files containing account data"
-        external:
-          location: s3://warehouse/accounts/
-          file_format: csv
-          options:
-            header: true
-            delimiter: ','
-            nullValue: ''
+        description: "Account data loaded from CSV"
+        meta:
+          landing_path: s3a://landing/accounts/
+          csv_options:
             dateFormat: 'yyyy-MM-dd'
-      
+
       - name: branches
-        description: "CSV files containing branch data"
-        external:
-          location: s3://warehouse/branches/
-          file_format: csv
-          options:
-            header: true
-            delimiter: ','
-            nullValue: ''
+        description: "Branch data loaded from CSV"
+        meta:
+          landing_path: s3a://landing/branches/
 
       - name: cards
-        description: "CSV files containing card data"
-        external:
-          location: s3://warehouse/cards/
-          file_format: csv
-          options:
-            header: true
-            delimiter: ','
-            nullValue: ''
+        description: "Card data loaded from CSV"
+        meta:
+          landing_path: s3a://landing/cards/
+          csv_options:
             dateFormat: 'yyyy-MM-dd'
 
       - name: loans
-        description: "CSV files containing loan data"
-        external:
-          location: s3://warehouse/loans/
-          file_format: csv
-          options:
-            header: true
-            delimiter: ','
-            nullValue: ''
+        description: "Loan data loaded from CSV"
+        meta:
+          landing_path: s3a://landing/loans/
+          csv_options:
             dateFormat: 'yyyy-MM-dd'
 
       - name: merchants
-        description: "CSV files containing merchant data"
-        external:
-          location: s3://warehouse/merchants/
-          file_format: csv
-          options:
-            header: true
-            delimiter: ','
-            nullValue: ''
-      
+        description: "Merchant data loaded from CSV"
+        meta:
+          landing_path: s3a://landing/merchants/
+
       - name: transactions
-        description: "CSV files containing transaction data"
-        external:
-          location: s3://warehouse/transactions/
-          file_format: csv
-          options:
-            header: true
-            delimiter: ','
-            nullValue: ''
+        description: "Transaction data loaded from CSV"
+        meta:
+          landing_path: s3a://landing/transactions/
+          csv_options:
             dateFormat: 'yyyy-MM-dd'

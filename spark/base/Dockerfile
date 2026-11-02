@@ -16,43 +16,43 @@ RUN apt-get update && apt-get install -y \
 # Spark / Iceberg versions
 # -----------------------------
 ARG ICEBERG_VERSION=1.11.0
-ARG HADOOP_AWS_VERSION=3.4.1
 ARG AWS_SDK_VERSION=2.25.60
 ARG POSTGRES_JDBC_VERSION=42.7.3
+ARG MAVEN=https://repo1.maven.org/maven2
 
 # -----------------------------
-# Create jars directory
+# Extra jars go straight into $SPARK_HOME/jars so the master, workers and
+# thrift server all have them on the classpath. (Spark does not read a
+# SPARK_EXTRA_JARS variable, so a separate jars-extra folder is never loaded.)
+# curl -f makes the build fail loudly if a download 404s.
 # -----------------------------
-RUN mkdir -p /opt/spark/jars-extra
 
-# -----------------------------
-# Download Iceberg runtime
-# -----------------------------
-RUN curl -L -o /opt/spark/jars-extra/iceberg-spark-runtime.jar \
-https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-4.1_2.13/${ICEBERG_VERSION}/iceberg-spark-runtime-4.1_2.13-${ICEBERG_VERSION}.jar
+# Iceberg runtime for Spark 4.1 / Scala 2.13
+RUN curl -fL -o /opt/spark/jars/iceberg-spark-runtime.jar \
+    ${MAVEN}/org/apache/iceberg/iceberg-spark-runtime-4.1_2.13/${ICEBERG_VERSION}/iceberg-spark-runtime-4.1_2.13-${ICEBERG_VERSION}.jar
 
-# -----------------------------
-# Hadoop AWS (S3 support)
-# -----------------------------
-RUN curl -L -o /opt/spark/jars-extra/hadoop-aws.jar \
-https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar
+# hadoop-aws must match the Hadoop version bundled with Spark exactly,
+# so detect it from the hadoop-client-api jar instead of hardcoding it.
+RUN HADOOP_VERSION=$(ls /opt/spark/jars/hadoop-client-api-*.jar | sed -E 's/.*hadoop-client-api-(.*)\.jar/\1/') \
+ && echo "Detected Hadoop ${HADOOP_VERSION}" \
+ && curl -fL -o /opt/spark/jars/hadoop-aws.jar \
+    ${MAVEN}/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar
 
-# -----------------------------
-# AWS SDK bundle (required by hadoop-aws)
-# -----------------------------
-RUN curl -L -o /opt/spark/jars-extra/aws-sdk-bundle.jar \
-https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/${AWS_SDK_VERSION}/bundle-${AWS_SDK_VERSION}.jar
+# AWS SDK v2 bundle (used by both hadoop-aws/S3A and Iceberg S3FileIO)
+RUN curl -fL -o /opt/spark/jars/aws-sdk-bundle.jar \
+    ${MAVEN}/software/amazon/awssdk/bundle/${AWS_SDK_VERSION}/bundle-${AWS_SDK_VERSION}.jar
 
-# -----------------------------
 # PostgreSQL JDBC driver
-# -----------------------------
-RUN curl -L -o /opt/spark/jars-extra/postgresql.jar \
-https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar
+RUN curl -fL -o /opt/spark/jars/postgresql.jar \
+    ${MAVEN}/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar
 
 # -----------------------------
-# Make Spark load extra jars automatically
+# Spark configuration (Iceberg catalog, MinIO, event logs)
 # -----------------------------
-ENV SPARK_EXTRA_JARS=/opt/spark/jars-extra/*
+COPY conf/spark-defaults.conf /opt/spark/conf/spark-defaults.conf
+COPY conf/spark-env.sh /opt/spark/conf/spark-env.sh
+RUN chmod +x /opt/spark/conf/spark-env.sh \
+ && mkdir -p /tmp/spark-events /tmp/spark-logs
 
 # -----------------------------
 # Entrypoint handling

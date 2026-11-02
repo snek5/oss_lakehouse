@@ -61,7 +61,7 @@ select
         else 'Active'
     end as card_status,
     -- Card age in days
-    datediff('day', cards.expiration_date, current_timestamp()) as days_since_expiry,
+    timestampdiff(DAY, cards.expiration_date, current_timestamp()) as days_since_expiry,
     -- Card type category
     case 
         when cards.card_type = 'Credit' then 'Credit Card'

@@ -1,6 +1,16 @@
 name: 'teratai'
 version: '1.0'
+config-version: 2
 profile: 'lakehouse'
+
 model-paths: ["models"]
+macro-paths: ["macros"]
+
+# Create raw.* Iceberg tables from the landing CSVs before any model runs.
+# Skips tables that already exist; pass --vars '{refresh_raw: true}' to reload.
+on-run-start:
+  - "{{ stage_raw_sources(from_hook=true) }}"
+
 models:
-  +file_format: iceberg
+  teratai:
+    +file_format: iceberg

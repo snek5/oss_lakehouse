@@ -12,5 +12,10 @@
 
 -- Macro to hash sensitive columns
 {% macro hash_column(column_name, algorithm='sha256') %}
-    {{ algorithm }}({{ column_name }})
+    {#- Spark has no sha256(); use sha2(x, bits) for the SHA-2 family -#}
+    {%- if algorithm in ['sha224', 'sha256', 'sha384', 'sha512'] -%}
+    sha2(cast({{ column_name }} as string), {{ algorithm[3:] }})
+    {%- else -%}
+    {{ algorithm }}(cast({{ column_name }} as string))
+    {%- endif -%}
 {% endmacro %}

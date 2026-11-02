@@ -5,9 +5,6 @@
         unique_key='account_id',
         incremental_strategy='merge',
         tags=['marts', 'fact', 'account'],
-        grants={
-            'select': ['analytics_reader', 'operations']
-        },
         on_schema_change='append_new_columns'
     )
 }}
@@ -131,7 +128,7 @@ select
         else 'Standard'
     end as account_health_status,
     -- Hash for tracking
-    {{ hash_column('ab.account_id || ab.current_balance::text || current_timestamp()::text') }} as account_snapshot_hash,
+    {{ hash_column('ab.account_id || cast(ab.current_balance as string) || cast(current_timestamp() as string)') }} as account_snapshot_hash,
     -- Metadata
     current_timestamp() as dbt_updated_at,
     '{{ invocation_id }}' as dbt_invocation_id

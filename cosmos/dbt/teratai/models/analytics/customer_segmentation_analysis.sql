@@ -2,10 +2,7 @@
     config(
         materialized='view',
         schema='analytics',
-        tags=['analytics', 'customer_segmentation'],
-        grants={
-            'select': ['analytics_reader', 'marketing_team']
-        }
+        tags=['analytics', 'customer_segmentation']
     )
 }}
 

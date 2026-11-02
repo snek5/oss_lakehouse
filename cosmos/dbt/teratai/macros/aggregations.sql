@@ -10,7 +10,7 @@
             customer_id,
             sum(amount_usd) as total_spend,
             count(distinct transaction_id) as transaction_count,
-            datediff('day', min(transaction_date), max(transaction_date)) as customer_lifetime_days
+            timestampdiff(DAY, min(transaction_date), max(transaction_date)) as customer_lifetime_days
         from {{ ref('fct_transactions') }}
         where customer_id = {{ customer_id }}
         group by 1

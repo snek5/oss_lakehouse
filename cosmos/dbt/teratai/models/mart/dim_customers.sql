@@ -3,9 +3,6 @@
         materialized='table',
         schema='marts',
         tags=['marts', 'dimension', 'customer'],
-        grants={
-            'select': ['analytics_reader', 'reporting_user']
-        },
         on_schema_change='sync_all_columns'
     )
 }}

@@ -10,12 +10,12 @@
 
 -- Macro for date difference calculation
 {% macro date_diff(date1, date2, unit='day') %}
-    datediff({{ unit }}, {{ date1 }}, {{ date2 }})
+    timestampdiff({{ unit | upper }}, {{ date1 }}, {{ date2 }})
 {% endmacro %}
 
 -- Macro to calculate age in years
 {% macro age_years(date_column) %}
-    floor(datediff('day', {{ date_column }}, current_timestamp()) / 365.25)
+    floor(timestampdiff(DAY, {{ date_column }}, current_timestamp()) / 365.25)
 {% endmacro %}
 
 -- Macro to generate column list for staging
